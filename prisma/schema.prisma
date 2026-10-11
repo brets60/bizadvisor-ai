@@ -1,0 +1,207 @@
+// Prisma Schema for BizAdvisor AI
+// Supports SQLite for zero-config local development and PostgreSQL for Supabase / Production
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite" // Set to "postgresql" when using Supabase or PostgreSQL
+  url      = env("DATABASE_URL")
+}
+
+model Profile {
+  id                 String               @id @default(uuid())
+  full_name          String
+  email              String               @unique
+  password_hash      String?              // For secure standalone auth when Supabase Auth is not directly bound
+  email_verified     Boolean              @default(false)
+  verification_token String?
+  reset_token        String?
+  reset_expires      DateTime?
+  preferred_currency String               @default("PHP")
+  country            String               @default("Philippines")
+  created_at         DateTime             @default(now())
+  updated_at         DateTime             @updatedAt
+
+  business_profile   BusinessProfile?
+  conversations      Conversation[]
+  business_ideas     BusinessIdea[]
+  business_plans     BusinessPlan[]
+  marketing_plans    MarketingPlan[]
+  financial_calcs    FinancialCalculation[]
+  action_plans       ActionPlan[]
+  saved_resources    SavedResource[]
+  research_notes     ResearchNote[]
+
+  @@map("profiles")
+}
+
+model BusinessProfile {
+  id             String    @id @default(uuid())
+  user_id        String    @unique
+  profile        Profile   @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  business_name  String?
+  industry       String?
+  business_stage String?   // "planning" | "startup" | "operating" | "scaling"
+  budget_range   String?
+  target_market  String?
+  goals          String?
+  challenge      String?
+  onboarding_completed Boolean @default(false)
+  created_at     DateTime  @default(now())
+  updated_at     DateTime  @updatedAt
+
+  @@map("business_profiles")
+}
+
+model Conversation {
+  id         String    @id @default(uuid())
+  user_id    String
+  profile    Profile   @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  title      String
+  created_at DateTime  @default(now())
+  updated_at DateTime  @updatedAt
+
+  messages   Message[]
+
+  @@index([user_id])
+  @@map("conversations")
+}
+
+model Message {
+  id              String       @id @default(uuid())
+  conversation_id String
+  conversation    Conversation @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
+  role            String       // "user" | "assistant" | "system"
+  content         String
+  is_saved        Boolean      @default(false)
+  created_at      DateTime     @default(now())
+
+  @@index([conversation_id])
+  @@map("messages")
+}
+
+model BusinessIdea {
+  id                    String    @id @default(uuid())
+  user_id               String
+  profile               Profile   @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  title                 String
+  concept               String
+  target_market         String
+  startup_cost_estimate String
+  assumptions           String
+  risks                 String
+  status                String    @default("saved") // "saved" | "shortlisted" | "archived" | "in_progress"
+  raw_data              String?   // JSON string of full structured attributes (revenue model, validation steps, etc.)
+  created_at            DateTime  @default(now())
+  updated_at            DateTime  @updatedAt
+
+  business_plans        BusinessPlan[]
+
+  @@index([user_id])
+  @@map("business_ideas")
+}
+
+model BusinessPlan {
+  id               String        @id @default(uuid())
+  user_id          String
+  profile          Profile       @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  business_idea_id String?
+  business_idea    BusinessIdea? @relation(fields: [business_idea_id], references: [id], onDelete: SetNull)
+  title            String
+  content          String        // Serialized 14-section JSON structure or markdown
+  version          Int           @default(1)
+  created_at       DateTime      @default(now())
+  updated_at       DateTime      @updatedAt
+
+  marketing_plans  MarketingPlan[]
+
+  @@index([user_id])
+  @@map("business_plans")
+}
+
+model MarketingPlan {
+  id               String        @id @default(uuid())
+  user_id          String
+  profile          Profile       @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  business_plan_id String?
+  business_plan    BusinessPlan? @relation(fields: [business_plan_id], references: [id], onDelete: SetNull)
+  title            String
+  content          String        // Serialized JSON with campaigns, social posts, branding, channels
+  created_at       DateTime      @default(now())
+  updated_at       DateTime      @updatedAt
+
+  @@index([user_id])
+  @@map("marketing_plans")
+}
+
+model FinancialCalculation {
+  id               String    @id @default(uuid())
+  user_id          String
+  profile          Profile   @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  calculation_type String    // "startup_cost" | "profit_margin" | "break_even" | "cash_flow"
+  title            String?
+  inputs           String    // JSON string
+  results          String    // JSON string
+  ai_explanation   String?
+  created_at       DateTime  @default(now())
+
+  @@index([user_id])
+  @@map("financial_calculations")
+}
+
+model ActionPlan {
+  id             String    @id @default(uuid())
+  user_id        String
+  profile        Profile   @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  title          String
+  description    String
+  category       String?   // "retention" | "pricing" | "operations" | "marketing" | "general"
+  target_date    DateTime?
+  priority       String    @default("medium") // "low" | "medium" | "high" | "urgent"
+  status         String    @default("pending") // "pending" | "in_progress" | "completed" | "archived"
+  success_metric String
+  expected_resources String?
+  risks          String?
+  created_at     DateTime  @default(now())
+  updated_at     DateTime  @updatedAt
+
+  @@index([user_id])
+  @@map("action_plans")
+}
+
+model SavedResource {
+  id            String    @id @default(uuid())
+  user_id       String
+  profile       Profile   @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  resource_type String    // "conversation" | "idea" | "plan" | "marketing" | "financial" | "growth" | "research"
+  resource_id   String
+  title         String
+  summary       String?
+  created_at    DateTime  @default(now())
+
+  @@index([user_id])
+  @@map("saved_resources")
+}
+
+model ResearchNote {
+  id            String    @id @default(uuid())
+  user_id       String
+  profile       Profile   @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  industry      String
+  location      String
+  target_audience String
+  competitors   String?   // JSON string
+  pricing_info  String?
+  research_questions String?
+  verified_sources   String? // JSON string
+  user_inputs        String? // JSON string
+  ai_hypotheses      String? // JSON string
+  checklist          String? // JSON string
+  created_at    DateTime  @default(now())
+  updated_at    DateTime  @updatedAt
+
+  @@index([user_id])
+  @@map("research_notes")
+}
