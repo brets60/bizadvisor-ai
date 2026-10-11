@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BizAdvisor AI — Offline / Connection</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { background-color: #f8fafc; color: #0f172a; display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 24px; }
+    .card { background: white; border: 1px solid #e2e8f0; border-radius: 16px; padding: 32px 24px; max-width: 440px; width: 100%; text-align: center; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); }
+    .icon { width: 56px; height: 56px; background: #eff6ff; color: #2563eb; border-radius: 14px; display: inline-flex; align-items: center; justify-content: center; font-size: 24px; margin-bottom: 16px; border: 1px solid #bfdbfe; }
+    h1 { font-size: 20px; font-weight: 700; margin-bottom: 8px; color: #0f172a; }
+    p { font-size: 13px; color: #64748b; line-height: 1.5; margin-bottom: 24px; }
+    .btn { display: block; width: 100%; background: #2563eb; color: white; border: none; padding: 12px; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer; transition: 0.2s; text-decoration: none; }
+    .btn:hover { background: #1d4ed8; }
+    .settings-box { margin-top: 24px; padding-top: 20px; border-top: 1px solid #f1f5f9; text-align: left; }
+    .label { font-size: 11px; font-weight: 600; color: #475569; text-transform: uppercase; margin-bottom: 6px; display: block; }
+    input { width: 100%; padding: 10px 12px; font-size: 12px; border: 1px solid #cbd5e1; border-radius: 8px; background: #f8fafc; margin-bottom: 12px; }
+    .btn-secondary { background: #f1f5f9; color: #334155; border: 1px solid #cbd5e1; padding: 10px; border-radius: 8px; font-size: 12px; font-weight: 600; width: 100%; cursor: pointer; }
+    .btn-secondary:hover { background: #e2e8f0; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="icon">💼</div>
+    <h1>Connecting to BizAdvisor AI</h1>
+    <p>Unable to connect to the advisory server. Ensure your backend server is running, or specify a custom cloud / network endpoint below.</p>
+    
+    <button class="btn" onclick="retryConnection()">Retry Connection</button>
+
+    <div class="settings-box">
+      <label class="label">Server Endpoint URL</label>
+      <input type="text" id="serverInput" placeholder="http://192.168.2.24:3001" />
+      <button class="btn-secondary" onclick="saveAndConnect()">Save Endpoint & Connect</button>
+    </div>
+  </div>
+
+  <script>
+    const defaultUrl = window.AndroidInterface ? window.AndroidInterface.getServerUrl() : "http://192.168.2.24:3001";
+    document.getElementById("serverInput").value = defaultUrl;
+
+    function retryConnection() {
+      if (window.AndroidInterface) {
+        window.AndroidInterface.reloadServer();
+      } else {
+        window.location.reload();
+      }
+    }
+
+    function saveAndConnect() {
+      const url = document.getElementById("serverInput").value.trim();
+      if (!url) return;
+      if (window.AndroidInterface) {
+        window.AndroidInterface.setServerUrl(url);
+      } else {
+        window.location.href = url;
+      }
+    }
+  </script>
+</body>
+</html>
