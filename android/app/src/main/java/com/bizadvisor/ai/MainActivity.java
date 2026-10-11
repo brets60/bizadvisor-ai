@@ -32,7 +32,7 @@ public class MainActivity extends AppCompatActivity {
 
     private static final String PREFS_NAME = "BizAdvisorPrefs";
     private static final String KEY_SERVER_URL = "server_url";
-    private static final String DEFAULT_SERVER_URL = "http://192.168.2.24:3001";
+    private static final String DEFAULT_SERVER_URL = "https://bizadvisor-ai-dun.vercel.app";
 
     private ValueCallback<Uri[]> fileUploadCallback;
     private static final int FILE_CHOOSER_REQUEST_CODE = 1001;

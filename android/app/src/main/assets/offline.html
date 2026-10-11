@@ -30,13 +30,13 @@
 
     <div class="settings-box">
       <label class="label">Server Endpoint URL</label>
-      <input type="text" id="serverInput" placeholder="http://192.168.2.24:3001" />
+      <input type="text" id="serverInput" placeholder="https://bizadvisor-ai-dun.vercel.app" />
       <button class="btn-secondary" onclick="saveAndConnect()">Save Endpoint & Connect</button>
     </div>
   </div>
 
   <script>
-    const defaultUrl = window.AndroidInterface ? window.AndroidInterface.getServerUrl() : "http://192.168.2.24:3001";
+    const defaultUrl = window.AndroidInterface ? window.AndroidInterface.getServerUrl() : "https://bizadvisor-ai-dun.vercel.app";
     document.getElementById("serverInput").value = defaultUrl;
 
     function retryConnection() {
