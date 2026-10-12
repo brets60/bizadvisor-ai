@@ -16,6 +16,9 @@ import {
   AlertCircle,
   MessageSquare,
   HelpCircle,
+  X,
+  ChevronRight,
+  Clock,
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 
@@ -42,6 +45,50 @@ const SAMPLE_PROMPTS = [
   "What low-cost digital marketing strategies work best on TikTok and Facebook for small stores?",
 ];
 
+// Error boundary to prevent white-screen crashes on mobile WebViews
+class AdvisorErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { hasError: boolean; error: Error | null }
+> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error("AdvisorErrorBoundary caught an error:", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="flex flex-col items-center justify-center min-h-[50vh] p-6 text-center bg-white rounded-2xl border border-slate-200 m-3">
+          <div className="w-12 h-12 rounded-xl bg-red-50 text-red-600 flex items-center justify-center mb-3">
+            <AlertCircle className="w-6 h-6" />
+          </div>
+          <h2 className="text-base font-bold text-slate-900">Unable to load AI Advisor</h2>
+          <p className="text-xs text-slate-500 mt-1 max-w-sm">
+            An unexpected error occurred while initializing the chat workspace.
+          </p>
+          <Button
+            onClick={() => this.setState({ hasError: false, error: null })}
+            variant="primary"
+            size="sm"
+            className="mt-4"
+          >
+            Retry Loading
+          </Button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 function AdvisorChatContent() {
   const searchParams = useSearchParams();
   const initialConvId = searchParams.get("c");
@@ -57,11 +104,14 @@ function AdvisorChatContent() {
   const [suggestedFollowUps, setSuggestedFollowUps] = useState<string[]>([]);
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
+  // Mobile history drawer
+  const [mobileHistoryOpen, setMobileHistoryOpen] = useState(false);
+
   // Rename modal
   const [editingConvId, setEditingConvId] = useState<string | null>(null);
   const [newTitle, setNewTitle] = useState("");
 
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const chatScrollRef = useRef<HTMLDivElement>(null);
 
   // Load conversations on mount
   useEffect(() => {
@@ -85,19 +135,25 @@ function AdvisorChatContent() {
     }
   }, [activeConversationId]);
 
-  // Scroll to bottom when messages update
+  // Internal container auto-scroll (NEVER scrolls the window)
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, isLoading]);
+    if (messages.length > 0 && chatScrollRef.current) {
+      chatScrollRef.current.scrollTo({
+        top: chatScrollRef.current.scrollHeight,
+        behavior: "smooth",
+      });
+    }
+  }, [messages.length, isLoading]);
 
   const fetchConversations = async () => {
     try {
       const res = await fetch("/api/advisor/conversations");
       if (res.ok) {
         const data = await res.json();
-        setConversations(data.conversations || []);
-        if (data.conversations.length > 0 && !activeConversationId && !initialPrompt) {
-          setActiveConversationId(data.conversations[0].id);
+        const convList = data.conversations || [];
+        setConversations(convList);
+        if (convList.length > 0 && !activeConversationId && !initialPrompt) {
+          setActiveConversationId(convList[0].id);
         }
       }
     } catch (err) {
@@ -191,6 +247,7 @@ function AdvisorChatContent() {
     setSuggestedFollowUps([]);
     setError(null);
     setInputQuestion("");
+    setMobileHistoryOpen(false);
   };
 
   const handleDeleteConversation = async (id: string, e: React.MouseEvent) => {
@@ -263,9 +320,11 @@ function AdvisorChatContent() {
   };
 
   return (
-    <div className="flex h-[calc(100vh-8.5rem)] rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-      {/* Conversation Sidebar */}
-      <div className="w-72 bg-slate-50 border-r border-slate-200 flex flex-col justify-between hidden md:flex">
+    <div className="flex-1 flex flex-col md:flex-row h-full min-h-[calc(100dvh-7.5rem)] lg:min-h-0 lg:h-[calc(100vh-8.5rem)] md:rounded-2xl md:border md:border-slate-200 bg-white md:shadow-sm overflow-hidden">
+      {/* ============================================================ */}
+      {/* 1. DESKTOP CONVERSATION SIDEBAR                              */}
+      {/* ============================================================ */}
+      <div className="w-72 bg-slate-50 border-r border-slate-200 flex-col justify-between hidden md:flex flex-shrink-0">
         <div className="p-3 border-b border-slate-200">
           <Button
             onClick={startNewChat}
@@ -357,16 +416,101 @@ function AdvisorChatContent() {
         </div>
       </div>
 
-      {/* Main Chat Workspace */}
-      <div className="flex-1 flex flex-col min-w-0 bg-white">
+      {/* ============================================================ */}
+      {/* 2. MOBILE CONVERSATION HISTORY DRAWER                        */}
+      {/* ============================================================ */}
+      {mobileHistoryOpen && (
+        <div className="fixed inset-0 z-50 md:hidden flex">
+          <div
+            className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs transition-opacity"
+            onClick={() => setMobileHistoryOpen(false)}
+          />
+          <div className="relative w-4/5 max-w-xs bg-white h-full shadow-2xl flex flex-col justify-between z-10 animate-in slide-in-from-left duration-200">
+            <div>
+              <div className="h-14 flex items-center justify-between px-4 border-b border-slate-100">
+                <div className="flex items-center gap-2">
+                  <MessageSquare className="w-4 h-4 text-brand-600" />
+                  <span className="font-bold text-slate-900 text-sm">Advisory History</span>
+                </div>
+                <button
+                  onClick={() => setMobileHistoryOpen(false)}
+                  className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-600"
+                  aria-label="Close history"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="p-3">
+                <Button
+                  onClick={startNewChat}
+                  variant="primary"
+                  size="sm"
+                  className="w-full flex items-center justify-center gap-1.5"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>New Advisory Session</span>
+                </Button>
+              </div>
+
+              <div className="overflow-y-auto max-h-[calc(100vh-140px)] px-3 space-y-1">
+                {conversations.length > 0 ? (
+                  conversations.map((c) => {
+                    const isActive = activeConversationId === c.id;
+                    return (
+                      <div
+                        key={c.id}
+                        onClick={() => {
+                          setActiveConversationId(c.id);
+                          setMobileHistoryOpen(false);
+                        }}
+                        className={`flex items-center justify-between p-2.5 rounded-xl text-xs cursor-pointer transition-colors ${
+                          isActive
+                            ? "bg-brand-50 text-brand-700 font-semibold border border-brand-200"
+                            : "text-slate-700 hover:bg-slate-50 border border-transparent"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 min-w-0 flex-1">
+                          <MessageSquare className={`w-3.5 h-3.5 flex-shrink-0 ${isActive ? "text-brand-600" : "text-slate-400"}`} />
+                          <span className="truncate">{c.title}</span>
+                        </div>
+                        <button
+                          onClick={(e) => handleDeleteConversation(c.id, e)}
+                          className="p-1 text-slate-400 hover:text-red-600 ml-1"
+                          title="Delete"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="p-4 text-center text-xs text-slate-400">
+                    No sessions yet.
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="p-3 border-t border-slate-100 text-[11px] text-slate-500 text-center">
+              BizAdvisor AI • Context Aware
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================ */}
+      {/* 3. MAIN CHAT WORKSPACE (100% Mobile & Desktop Responsive)    */}
+      {/* ============================================================ */}
+      <div className="flex-1 flex flex-col min-w-0 bg-white h-full">
         {/* Chat Header */}
-        <div className="h-14 border-b border-slate-100 px-6 flex items-center justify-between bg-white/80 backdrop-blur-sm sticky top-0 z-10">
-          <div className="flex items-center gap-2.5">
-            <div className="w-7 h-7 rounded-lg bg-brand-50 text-brand-600 flex items-center justify-center border border-brand-200">
+        <div className="h-13 sm:h-14 border-b border-slate-100 px-3.5 sm:px-6 flex items-center justify-between bg-white/95 backdrop-blur-sm sticky top-0 z-10 flex-shrink-0">
+          <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
+            <div className="w-7 h-7 rounded-lg bg-brand-50 text-brand-600 flex items-center justify-center border border-brand-200 flex-shrink-0">
               <Bot className="w-4 h-4" />
             </div>
-            <div>
-              <h2 className="text-sm font-bold text-slate-800">
+            <div className="min-w-0">
+              <h2 className="text-xs sm:text-sm font-bold text-slate-800 truncate">
                 {activeConversationId
                   ? conversations.find((c) => c.id === activeConversationId)?.title || "AI Business Advisor"
                   : "New Advisory Session"}
@@ -374,21 +518,42 @@ function AdvisorChatContent() {
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
+            {/* Mobile History Button */}
+            <button
+              onClick={() => setMobileHistoryOpen(true)}
+              className="md:hidden inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 transition-colors"
+              aria-label="View advisory history"
+            >
+              <Clock className="w-3.5 h-3.5" />
+              <span>History</span>
+              {conversations.length > 0 && (
+                <span className="text-[10px] bg-slate-200 text-slate-700 px-1 py-0.2 rounded-full font-bold ml-0.5">
+                  {conversations.length}
+                </span>
+              )}
+            </button>
+
+            {/* New Session Button */}
             <Button
               onClick={startNewChat}
               variant="outline"
               size="sm"
-              className="md:hidden"
+              className="px-2.5 sm:px-3 text-xs"
+              title="Start a new chat session"
             >
-              <Plus className="w-3.5 h-3.5" />
+              <Plus className="w-3.5 h-3.5 mr-1" />
+              <span className="hidden xs:inline">New</span>
             </Button>
+
+            {/* Regenerate Button */}
             {messages.length > 0 && (
               <Button
                 onClick={handleRegenerate}
                 variant="outline"
                 size="sm"
                 title="Regenerate last answer"
+                className="px-2.5 sm:px-3 text-xs"
               >
                 <RefreshCw className="w-3.5 h-3.5 mr-1" />
                 <span className="hidden sm:inline">Regenerate</span>
@@ -399,7 +564,7 @@ function AdvisorChatContent() {
 
         {/* Error notification banner */}
         {error && (
-          <div className="mx-6 mt-4 p-3.5 bg-red-50 border border-red-200 text-red-800 rounded-xl text-xs flex items-start justify-between gap-3">
+          <div className="mx-3 sm:mx-6 mt-3 p-3 bg-red-50 border border-red-200 text-red-800 rounded-xl text-xs flex items-start justify-between gap-3 flex-shrink-0">
             <div className="flex items-start gap-2.5">
               <AlertCircle className="w-4 h-4 text-red-600 flex-shrink-0 mt-0.5" />
               <div>
@@ -409,7 +574,7 @@ function AdvisorChatContent() {
             </div>
             <button
               onClick={() => handleSendMessage()}
-              className="text-xs font-semibold text-red-700 underline hover:text-red-900"
+              className="text-xs font-semibold text-red-700 underline hover:text-red-900 flex-shrink-0"
             >
               Retry
             </button>
@@ -417,21 +582,24 @@ function AdvisorChatContent() {
         )}
 
         {/* Message Stream */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+        <div
+          ref={chatScrollRef}
+          className="flex-1 min-h-0 overflow-y-auto p-3.5 sm:p-6 space-y-4 sm:space-y-6"
+        >
           {messages.length === 0 ? (
-            /* Empty State: Recommended Prompts */
-            <div className="h-full flex flex-col items-center justify-center text-center max-w-xl mx-auto py-8">
-              <div className="w-12 h-12 rounded-2xl bg-brand-50 text-brand-600 flex items-center justify-center border border-brand-200 shadow-sm mb-4">
-                <Sparkles className="w-6 h-6" />
+            /* Empty State: Recommended Prompts (Thumb-friendly & responsive) */
+            <div className="py-4 sm:py-8 max-w-xl mx-auto text-center">
+              <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-brand-50 text-brand-600 flex items-center justify-center border border-brand-200 shadow-xs mx-auto mb-3">
+                <Sparkles className="w-5 h-5 sm:w-6 sm:h-6" />
               </div>
-              <h3 className="text-base font-bold text-slate-900">
+              <h3 className="text-sm sm:text-base font-bold text-slate-900 px-2 leading-snug">
                 What business decision can BizAdvisor help you with today?
               </h3>
-              <p className="text-xs text-slate-500 mt-1 max-w-md">
+              <p className="text-[11px] sm:text-xs text-slate-500 mt-1 max-w-md mx-auto px-2">
                 Ask about pricing formulas, unit economics, lean startup testing, marketing channels, or competitor differentiation.
               </p>
 
-              <div className="mt-6 w-full text-left space-y-2">
+              <div className="mt-5 w-full text-left space-y-2">
                 <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider px-1">
                   Sample Inquiries:
                 </div>
@@ -439,10 +607,10 @@ function AdvisorChatContent() {
                   <button
                     key={idx}
                     onClick={() => handleSendMessage(prompt)}
-                    className="w-full p-3 rounded-xl border border-slate-200/80 bg-slate-50/50 hover:bg-white hover:border-brand-400 text-slate-700 text-xs font-medium text-left transition-all hover:shadow-xs flex items-center justify-between group"
+                    className="w-full p-2.5 sm:p-3 rounded-xl border border-slate-200/80 bg-slate-50/70 hover:bg-white hover:border-brand-400 active:scale-[0.99] text-slate-700 text-xs font-medium text-left transition-all hover:shadow-xs flex items-center justify-between group"
                   >
-                    <span>{prompt}</span>
-                    <span className="text-slate-400 group-hover:text-brand-600 text-xs ml-2">&rarr;</span>
+                    <span className="line-clamp-2 pr-2">{prompt}</span>
+                    <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-brand-600 flex-shrink-0" />
                   </button>
                 ))}
               </div>
@@ -455,19 +623,19 @@ function AdvisorChatContent() {
               return (
                 <div
                   key={msg.id}
-                  className={`flex gap-3.5 ${isAssistant ? "items-start" : "justify-end"}`}
+                  className={`flex gap-2.5 sm:gap-3.5 ${isAssistant ? "items-start" : "justify-end"}`}
                 >
                   {isAssistant && (
-                    <div className="w-8 h-8 rounded-lg bg-brand-500 text-white flex items-center justify-center flex-shrink-0 shadow-sm">
-                      <Bot className="w-4 h-4" />
+                    <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-brand-500 text-white flex items-center justify-center flex-shrink-0 shadow-xs mt-0.5">
+                      <Bot className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                     </div>
                   )}
 
                   <div
-                    className={`rounded-2xl p-4 sm:p-5 max-w-3xl text-sm leading-relaxed ${
+                    className={`rounded-2xl p-3.5 sm:p-5 max-w-[88%] sm:max-w-2xl text-xs sm:text-sm leading-relaxed ${
                       isAssistant
-                        ? "bg-slate-50/80 border border-slate-200/80 text-slate-900"
-                        : "bg-brand-500 text-white shadow-sm"
+                        ? "bg-slate-50/90 border border-slate-200/80 text-slate-900"
+                        : "bg-brand-500 text-white shadow-xs"
                     }`}
                   >
                     {/* Message Body */}
@@ -475,21 +643,21 @@ function AdvisorChatContent() {
 
                     {/* Actions for Assistant Message */}
                     {isAssistant && (
-                      <div className="mt-3 pt-3 border-t border-slate-200/60 flex items-center justify-between text-xs text-slate-500">
-                        <span className="text-[11px]">Structured Advisory Output</span>
-                        <div className="flex items-center gap-2">
+                      <div className="mt-3 pt-2.5 border-t border-slate-200/60 flex items-center justify-between text-[11px] text-slate-500">
+                        <span className="text-[10px] sm:text-[11px]">Structured Advisory Output</span>
+                        <div className="flex items-center gap-1.5 sm:gap-2">
                           <button
                             onClick={() => handleCopy(msg.id, msg.content)}
-                            className="inline-flex items-center gap-1 px-2 py-1 rounded hover:bg-slate-200/70 text-slate-600 transition-colors"
+                            className="inline-flex items-center gap-1 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded hover:bg-slate-200/70 text-slate-600 transition-colors"
                           >
                             {copiedId === msg.id ? (
                               <>
-                                <Check className="w-3.5 h-3.5 text-emerald-600" />
+                                <Check className="w-3 h-3 text-emerald-600" />
                                 <span className="text-emerald-600 font-medium">Copied</span>
                               </>
                             ) : (
                               <>
-                                <Copy className="w-3.5 h-3.5" />
+                                <Copy className="w-3 h-3" />
                                 <span>Copy</span>
                               </>
                             )}
@@ -497,12 +665,12 @@ function AdvisorChatContent() {
 
                           <button
                             onClick={() => handleToggleSaveMessage(msg.id)}
-                            className={`inline-flex items-center gap-1 px-2 py-1 rounded hover:bg-slate-200/70 transition-colors ${
+                            className={`inline-flex items-center gap-1 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded hover:bg-slate-200/70 transition-colors ${
                               msg.is_saved ? "text-amber-600 font-semibold" : "text-slate-600"
                             }`}
                           >
-                            <Bookmark className={`w-3.5 h-3.5 ${msg.is_saved ? "fill-current" : ""}`} />
-                            <span>{msg.is_saved ? "Saved in Library" : "Save Advice"}</span>
+                            <Bookmark className={`w-3 h-3 ${msg.is_saved ? "fill-current" : ""}`} />
+                            <span>{msg.is_saved ? "Saved" : "Save Advice"}</span>
                           </button>
                         </div>
                       </div>
@@ -515,30 +683,30 @@ function AdvisorChatContent() {
 
           {/* Assistant Loading State */}
           {isLoading && (
-            <div className="flex gap-3.5 items-start">
-              <div className="w-8 h-8 rounded-lg bg-brand-500 text-white flex items-center justify-center flex-shrink-0 animate-pulse">
-                <Bot className="w-4 h-4" />
+            <div className="flex gap-2.5 sm:gap-3.5 items-start">
+              <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-brand-500 text-white flex items-center justify-center flex-shrink-0 animate-pulse mt-0.5">
+                <Bot className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               </div>
-              <div className="rounded-2xl p-4 bg-slate-50 border border-slate-200 text-xs text-slate-600 flex items-center gap-2.5">
-                <span className="inline-block w-2 h-2 rounded-full bg-brand-500 animate-ping" />
-                <span>BizAdvisor AI is formulating prioritized recommendations based on your business context...</span>
+              <div className="rounded-2xl p-3.5 bg-slate-50 border border-slate-200 text-xs text-slate-600 flex items-center gap-2.5">
+                <span className="inline-block w-2 h-2 rounded-full bg-brand-500 animate-ping flex-shrink-0" />
+                <span>BizAdvisor AI is formulating prioritized recommendations...</span>
               </div>
             </div>
           )}
 
           {/* Follow-up Question Chips */}
           {suggestedFollowUps.length > 0 && !isLoading && (
-            <div className="pt-2 pl-11">
+            <div className="pt-2 pl-9 sm:pl-11">
               <div className="text-[11px] font-semibold text-slate-500 mb-2 flex items-center gap-1.5">
                 <HelpCircle className="w-3.5 h-3.5 text-brand-600" />
                 <span>Suggested Follow-Up Inquiries:</span>
               </div>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-1.5 sm:gap-2">
                 {suggestedFollowUps.map((fu, idx) => (
                   <button
                     key={idx}
                     onClick={() => handleSendMessage(fu)}
-                    className="text-xs bg-slate-50 hover:bg-brand-50 border border-slate-200 hover:border-brand-300 text-slate-700 hover:text-brand-800 px-3 py-1.5 rounded-full transition-colors text-left"
+                    className="text-xs bg-slate-50 hover:bg-brand-50 border border-slate-200 hover:border-brand-300 text-slate-700 hover:text-brand-800 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full transition-colors text-left"
                   >
                     &ldquo;{fu}&rdquo; &rarr;
                   </button>
@@ -546,39 +714,37 @@ function AdvisorChatContent() {
               </div>
             </div>
           )}
-
-          <div ref={messagesEndRef} />
         </div>
 
         {/* Input Bar */}
-        <div className="p-4 border-t border-slate-200 bg-white">
+        <div className="p-2.5 sm:p-4 border-t border-slate-200 bg-white sticky bottom-0 z-10 flex-shrink-0">
           <form
             onSubmit={(e) => {
               e.preventDefault();
               handleSendMessage();
             }}
-            className="flex items-center gap-2 bg-slate-50 p-2 rounded-xl border border-slate-200 focus-within:border-brand-500 focus-within:bg-white focus-within:ring-1 focus-within:ring-brand-500 transition-all"
+            className="flex items-center gap-1.5 sm:gap-2 bg-slate-50 p-1.5 sm:p-2 rounded-xl border border-slate-200 focus-within:border-brand-500 focus-within:bg-white focus-within:ring-1 focus-within:ring-brand-500 transition-all"
           >
             <input
               type="text"
               value={inputQuestion}
               onChange={(e) => setInputQuestion(e.target.value)}
-              placeholder="Ask BizAdvisor AI for advice, action steps, or financial guidance..."
-              className="flex-1 bg-transparent px-3 py-1.5 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none"
+              placeholder="Ask BizAdvisor AI for advice, action steps..."
+              className="flex-1 min-w-0 bg-transparent px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none"
               disabled={isLoading}
             />
             <Button
               type="submit"
               size="sm"
               disabled={!inputQuestion.trim() || isLoading}
-              className="rounded-lg shadow-xs"
+              className="rounded-lg shadow-xs px-3 flex-shrink-0"
             >
-              <Send className="w-4 h-4 mr-1" />
-              <span>Send</span>
+              <Send className="w-3.5 h-3.5 sm:mr-1" />
+              <span className="hidden sm:inline">Send</span>
             </Button>
           </form>
-          <div className="text-[11px] text-slate-400 mt-2 text-center">
-            BizAdvisor AI utilizes tailored context. Preliminary projections and costs are estimates, not guaranteed outcomes.
+          <div className="text-[10px] sm:text-[11px] text-slate-400 mt-1 sm:mt-1.5 text-center line-clamp-1">
+            BizAdvisor AI utilizes tailored context. Preliminary projections and costs are estimates.
           </div>
         </div>
       </div>
@@ -588,8 +754,10 @@ function AdvisorChatContent() {
 
 export default function AdvisorPage() {
   return (
-    <Suspense fallback={<div className="p-8 text-center text-xs text-slate-500">Loading AI Advisor...</div>}>
-      <AdvisorChatContent />
-    </Suspense>
+    <AdvisorErrorBoundary>
+      <Suspense fallback={<div className="p-8 text-center text-xs text-slate-500">Loading AI Advisor...</div>}>
+        <AdvisorChatContent />
+      </Suspense>
+    </AdvisorErrorBoundary>
   );
 }

@@ -297,9 +297,21 @@ export function AppShell({
         </header>
 
         {/* Page Content: Mobile-optimized padding with space for bottom nav */}
-        <main className="flex-1 w-full max-w-7xl mx-auto p-3 sm:p-6 md:p-8 pb-24 lg:pb-8">
-          {children}
-        </main>
+        {(() => {
+          const isAdvisorPage = pathname === "/advisor" || pathname.startsWith("/advisor/");
+          return (
+            <main
+              className={cn(
+                "flex-1 w-full max-w-7xl mx-auto",
+                isAdvisorPage
+                  ? "p-0 pb-16 lg:p-6 md:p-8 lg:pb-8 flex flex-col min-h-0"
+                  : "p-3 sm:p-6 md:p-8 pb-24 lg:pb-8"
+              )}
+            >
+              {children}
+            </main>
+          );
+        })()}
       </div>
 
       {/* ============================================================ */}
