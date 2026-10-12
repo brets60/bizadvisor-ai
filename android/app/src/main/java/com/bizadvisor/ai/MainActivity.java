@@ -49,6 +49,9 @@ public class MainActivity extends AppCompatActivity {
         swipeRefresh.addView(webView);
         setContentView(swipeRefresh);
 
+        // Ensure swipe-refresh only triggers when scrolled to very top
+        swipeRefresh.setOnChildScrollUpCallback((parent, child) -> webView.getScrollY() > 0);
+
         // Configure WebView
         WebSettings settings = webView.getSettings();
         settings.setJavaScriptEnabled(true);
@@ -59,6 +62,8 @@ public class MainActivity extends AppCompatActivity {
         settings.setUseWideViewPort(true);
         settings.setLoadWithOverviewMode(true);
         settings.setSupportZoom(false);
+        settings.setDisplayZoomControls(false);
+        settings.setTextZoom(100); // Lock 100% zoom to maintain pixel-perfect responsive fit
         settings.setCacheMode(WebSettings.LOAD_DEFAULT);
         settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
         settings.setUserAgentString(settings.getUserAgentString() + " BizAdvisorAI-Android/1.0");
