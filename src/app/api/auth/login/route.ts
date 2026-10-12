@@ -72,7 +72,10 @@ export async function POST(request: NextRequest) {
   } catch (error: any) {
     console.error("Login error:", error);
     return NextResponse.json(
-      { error: "Internal server error. Please try again." },
+      { 
+        error: error?.message || "Internal server error. Please try again.",
+        code: error?.code || "UNKNOWN"
+      },
       { status: 500 }
     );
   }
