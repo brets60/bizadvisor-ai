@@ -20,6 +20,7 @@ import {
   X,
   User,
   Sparkles,
+  Smartphone,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -135,8 +136,15 @@ export function AppShell({
           </nav>
         </div>
 
-        {/* Desktop Logout */}
-        <div className="p-4 border-t border-slate-100">
+        {/* Desktop Download App & Logout */}
+        <div className="p-3 border-t border-slate-100 space-y-1">
+          <Link
+            href="/download"
+            className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-brand-700 bg-brand-50/80 hover:bg-brand-100 rounded-lg transition-colors border border-brand-200/60"
+          >
+            <Smartphone className="w-4 h-4 text-brand-600 flex-shrink-0" />
+            <span>Download Android App</span>
+          </Link>
           <button
             onClick={handleLogout}
             className="w-full flex items-center gap-3 px-3 py-2 text-sm text-slate-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors font-medium"
@@ -220,14 +228,22 @@ export function AppShell({
               </nav>
             </div>
 
-            {/* Drawer Logout */}
-            <div className="p-4 border-t border-slate-100 bg-white">
+            {/* Drawer Download & Logout */}
+            <div className="p-3 border-t border-slate-100 bg-white space-y-1.5">
+              <Link
+                href="/download"
+                onClick={closeMobileMenu}
+                className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-brand-700 bg-brand-50 hover:bg-brand-100 rounded-lg transition-colors border border-brand-200"
+              >
+                <Smartphone className="w-4 h-4 text-brand-600 flex-shrink-0" />
+                <span>Download Android App (.APK)</span>
+              </Link>
               <button
                 onClick={() => {
                   closeMobileMenu();
                   handleLogout();
                 }}
-                className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-red-600 hover:bg-red-50 rounded-lg font-medium transition-colors"
+                className="w-full flex items-center gap-3 px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg font-medium transition-colors"
               >
                 <LogOut className="w-4 h-4" />
                 <span>Sign Out</span>
@@ -270,7 +286,16 @@ export function AppShell({
           </div>
 
           {/* Right: Actions & User Info */}
-          <div className="flex items-center gap-2 sm:gap-4">
+          <div className="flex items-center gap-1.5 sm:gap-3">
+            <Link
+              href="/download"
+              className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600 hover:text-brand-600 bg-slate-50 hover:bg-slate-100 px-2 sm:px-2.5 py-1.5 rounded-full border border-slate-200 transition-colors"
+              title="Download Android App"
+            >
+              <Smartphone className="w-3.5 h-3.5 text-brand-600" />
+              <span className="hidden sm:inline">Get App</span>
+            </Link>
+
             <Link
               href="/advisor"
               className="inline-flex items-center gap-1.5 text-xs font-medium text-brand-700 bg-brand-50 hover:bg-brand-100 px-2.5 sm:px-3 py-1.5 rounded-full border border-brand-200 transition-colors"

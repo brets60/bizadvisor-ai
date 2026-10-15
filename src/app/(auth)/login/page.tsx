@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Eye, EyeOff, Building2, AlertCircle, ArrowRight } from "lucide-react";
+import { Eye, EyeOff, Building2, AlertCircle, ArrowRight, Smartphone } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 
 export default function LoginPage() {
@@ -125,6 +125,16 @@ export default function LoginPage() {
             Don&apos;t have an account yet?{" "}
             <Link href="/register" className="font-semibold text-brand-600 hover:text-brand-700">
               Create an account
+            </Link>
+          </div>
+
+          <div className="mt-4 pt-4 border-t border-slate-100 text-center">
+            <Link
+              href="/download"
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600 hover:text-brand-600 bg-slate-50 hover:bg-slate-100 px-3 py-1.5 rounded-full border border-slate-200 transition-colors"
+            >
+              <Smartphone className="w-3.5 h-3.5 text-brand-500" />
+              <span>Download Android App (.APK)</span>
             </Link>
           </div>
         </div>
