@@ -51,10 +51,19 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    const hasGeminiKey = !!process.env.GEMINI_API_KEY;
+    const geminiKeyMasked = process.env.GEMINI_API_KEY
+      ? `${process.env.GEMINI_API_KEY.slice(0, 6)}...${process.env.GEMINI_API_KEY.slice(-4)}`
+      : "Not configured (using auto-resolved cluster)";
+
     return NextResponse.json({
       status: "healthy",
       databaseConnected: true,
       databaseUrlMasked: maskedUrl,
+      aiEngine: "Google Gemini",
+      hasGeminiKey,
+      geminiKeyMasked,
+      geminiModel: process.env.GEMINI_MODEL || "gemini-1.5-flash",
       tables,
       profileCount,
       seedResult,

@@ -70,11 +70,15 @@ export async function POST(request: NextRequest) {
       where: { user_id: user.id },
     });
 
+    // Check for user-provided Gemini API key from Settings or custom header
+    const userApiKey = request.headers.get("x-gemini-key")?.trim() || undefined;
+
     let aiResult;
     try {
       aiResult = await adviseBusiness({
         question: question.trim(),
         history: formattedHistory,
+        apiKey: userApiKey,
         context: {
           fullName: user.full_name,
           businessName: businessProfile?.business_name,

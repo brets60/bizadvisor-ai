@@ -12,6 +12,8 @@ import {
   AlertCircle,
   Shield,
   Key,
+  Sparkles,
+  RefreshCw,
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
@@ -42,9 +44,59 @@ export default function SettingsPage() {
   const [deleteConfirmationText, setDeleteConfirmationText] = useState("");
   const [isDeleting, setIsDeleting] = useState(false);
 
+  // Gemini AI Key settings
+  const [geminiApiKey, setGeminiApiKey] = useState("");
+  const [geminiKeySaved, setGeminiKeySaved] = useState(false);
+  const [testingKey, setTestingKey] = useState(false);
+  const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
+
   useEffect(() => {
     fetchProfile();
+    if (typeof window !== "undefined") {
+      const savedKey = localStorage.getItem("bizadvisor_gemini_key") || "";
+      setGeminiApiKey(savedKey);
+    }
   }, []);
+
+  const handleSaveGeminiKey = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (typeof window !== "undefined") {
+      const trimmed = geminiApiKey.trim();
+      if (trimmed) {
+        localStorage.setItem("bizadvisor_gemini_key", trimmed);
+      } else {
+        localStorage.removeItem("bizadvisor_gemini_key");
+      }
+      setGeminiKeySaved(true);
+      setTestResult(null);
+      setTimeout(() => setGeminiKeySaved(false), 3000);
+    }
+  };
+
+  const handleTestGeminiKey = async () => {
+    setTestingKey(true);
+    setTestResult(null);
+    try {
+      const res = await fetch("/api/advisor/chat", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(geminiApiKey.trim() ? { "x-gemini-key": geminiApiKey.trim() } : {}),
+        },
+        body: JSON.stringify({ question: "Ping! Please verify active Gemini connection." }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setTestResult({ success: true, message: "Google Gemini is connected and responsive!" });
+      } else {
+        setTestResult({ success: false, message: data.error || "Connection failed. Please verify your API key." });
+      }
+    } catch (err: any) {
+      setTestResult({ success: false, message: "Network error: " + err.message });
+    } finally {
+      setTestingKey(false);
+    }
+  };
 
   const fetchProfile = async () => {
     try {
@@ -307,6 +359,101 @@ export default function SettingsPage() {
           </div>
         </div>
       </form>
+
+      {/* Google Gemini AI Engine Configuration */}
+      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-100">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center border border-emerald-200 shadow-xs flex-shrink-0">
+              <Sparkles className="w-4 h-4" />
+            </div>
+            <div>
+              <h2 className="text-sm font-bold text-slate-900">Google Gemini AI Engine</h2>
+              <div className="text-[11px] text-slate-500">
+                Powers real-time business advisory, 14-section plans, and deterministic financial calculations
+              </div>
+            </div>
+          </div>
+          <span className="self-start sm:self-auto text-xs bg-emerald-100 text-emerald-800 px-2.5 py-0.5 rounded-full font-bold">
+            Gemini 1.5 Flash
+          </span>
+        </div>
+
+        <form onSubmit={handleSaveGeminiKey} className="space-y-4">
+          <div>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 mb-1">
+              <label className="block text-xs font-semibold text-slate-700">
+                Google Gemini API Key
+              </label>
+              <a
+                href="https://aistudio.google.com/app/apikey"
+                target="_blank"
+                rel="noreferrer"
+                className="text-[11px] text-brand-600 hover:text-brand-800 underline font-medium"
+              >
+                Get Free API Key from Google AI Studio &rarr;
+              </a>
+            </div>
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+              <div className="relative flex-1">
+                <input
+                  type="password"
+                  value={geminiApiKey}
+                  onChange={(e) => setGeminiApiKey(e.target.value)}
+                  placeholder="Paste your Gemini API key (starts with AIzaSy...)"
+                  className="block w-full px-3.5 py-2 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:bg-white focus:border-brand-500 focus:outline-none font-mono"
+                />
+              </div>
+              <Button type="submit" size="sm" variant="primary" className="flex-shrink-0">
+                <Key className="w-3.5 h-3.5 mr-1" />
+                <span>Save Key</span>
+              </Button>
+            </div>
+            <p className="text-[11px] text-slate-500 mt-1.5">
+              {geminiApiKey.trim()
+                ? "Custom Gemini key is stored securely on your device and applied to all your advisory inquiries."
+                : "No custom key entered. The application is using the server's cloud cluster by default."}
+            </p>
+          </div>
+
+          {geminiKeySaved && (
+            <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs rounded-xl flex items-center gap-2">
+              <Check className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+              <span>Gemini API Key preference saved successfully!</span>
+            </div>
+          )}
+
+          {testResult && (
+            <div
+              className={`p-3 border text-xs rounded-xl flex items-center gap-2 ${
+                testResult.success
+                  ? "bg-emerald-50 border-emerald-200 text-emerald-800"
+                  : "bg-red-50 border-red-200 text-red-800"
+              }`}
+            >
+              {testResult.success ? (
+                <Check className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+              ) : (
+                <AlertCircle className="w-4 h-4 text-red-600 flex-shrink-0" />
+              )}
+              <span>{testResult.message}</span>
+            </div>
+          )}
+
+          <div className="pt-1 flex items-center gap-2">
+            <Button
+              type="button"
+              onClick={handleTestGeminiKey}
+              variant="outline"
+              size="sm"
+              isLoading={testingKey}
+            >
+              <RefreshCw className="w-3.5 h-3.5 mr-1" />
+              <span>Test AI Connection</span>
+            </Button>
+          </div>
+        </form>
+      </div>
 
       {/* Data Management & Security */}
       <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">

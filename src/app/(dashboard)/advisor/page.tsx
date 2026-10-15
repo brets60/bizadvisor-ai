@@ -194,9 +194,13 @@ function AdvisorChatContent() {
     setSuggestedFollowUps([]);
 
     try {
+      const customGeminiKey = typeof window !== "undefined" ? localStorage.getItem("bizadvisor_gemini_key") : null;
       const res = await fetch("/api/advisor/chat", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(customGeminiKey ? { "x-gemini-key": customGeminiKey } : {}),
+        },
         body: JSON.stringify({
           question: question.trim(),
           conversationId: activeConversationId || undefined,
@@ -510,11 +514,17 @@ function AdvisorChatContent() {
               <Bot className="w-4 h-4" />
             </div>
             <div className="min-w-0">
-              <h2 className="text-xs sm:text-sm font-bold text-slate-800 truncate">
-                {activeConversationId
-                  ? conversations.find((c) => c.id === activeConversationId)?.title || "AI Business Advisor"
-                  : "New Advisory Session"}
-              </h2>
+              <div className="flex items-center gap-1.5">
+                <h2 className="text-xs sm:text-sm font-bold text-slate-800 truncate">
+                  {activeConversationId
+                    ? conversations.find((c) => c.id === activeConversationId)?.title || "AI Business Advisor"
+                    : "New Advisory Session"}
+                </h2>
+                <span className="hidden sm:inline-flex items-center gap-1 text-[10px] bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded font-semibold border border-emerald-200">
+                  <Sparkles className="w-2.5 h-2.5 text-emerald-600" />
+                  Gemini 1.5 Flash
+                </span>
+              </div>
             </div>
           </div>
 

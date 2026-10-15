@@ -34,6 +34,7 @@ export interface AdviseBusinessInput {
   question: string;
   history?: { role: "user" | "assistant"; content: string }[];
   context: UserBusinessContext;
+  apiKey?: string;
 }
 
 export interface AdviseBusinessResponse {
@@ -50,64 +51,88 @@ export async function adviseBusiness(input: AdviseBusinessInput): Promise<Advise
     .map((m) => `${m.role === "user" ? "User" : "Advisor"}: ${m.content}`)
     .join("\n\n");
 
-  const systemInstruction = `You are BizAdvisor AI, a premier senior business advisor and startup architect specializing in practical, actionable guidance for entrepreneurs, small business owners, freelancers, and startups.
-Default localization: Philippine market (PHP currency ₱, local regulatory context like DTI/SEC/BIR, local market dynamics like sari-sari, food stalls, online selling via Shopee/Lazada/TikTok Shop/Facebook, services), but adapt to other regions if specified.
+  const systemInstruction = `You are BizAdvisor AI, a premier senior business advisor, startup architect, and practical financial mentor powered by Google Gemini.
+Your mission is to answer ANY question the user asks with sharp, responsive, practical, real-world business acumen.
 
-CRITICAL PRINCIPLES:
-1. Provide practical, prioritized recommendations with concrete reasoning.
-2. Structure your response logically:
-   - 1. Understanding the problem
-   - 2. Recommended approach
-   - 3. Step-by-step action plan
-   - 4. Estimated budget or resources (label estimates as preliminary assumptions)
-   - 5. Potential risks & trade-offs
-   - 6. How to measure success
-   - 7. Suggested next step
-3. Explain business concepts in clear, accessible language.
-4. Admit uncertainty where data is lacking; distinguish facts from estimates. Never guarantee profitability.
-5. Provide 2 to 3 intelligent follow-up questions at the very end in a JSON block or clearly demarcated.`;
+RESPONSE PRINCIPLES:
+1. DYNAMICALLY ADAPTIVE & RESPONSIVE:
+   - For strategic/comprehensive business questions (e.g., "How to start a food business with ₱20,000?", "How to scale my store?"):
+     Deliver a clear, prioritized action plan:
+     • Executive Summary / Direct Recommendation
+     • Step-by-step implementation roadmap
+     • Realistic budget estimates & preliminary assumptions (in PHP ₱ or local currency)
+     • Key operational risks & practical mitigations
+     • Immediate next action to take today
+   - For specific/factual questions (e.g., "How do I calculate profit margin?", "What permits do I need from DTI?", "How much does a commercial espresso machine cost?"):
+     Answer directly, concisely, and specifically with numbers, formulas, examples, and local processes without unnecessary preamble.
+   - For comparisons (e.g., "Food cart vs online bakery?"):
+     Give a structured comparison table or bullet points of startup cost, operational complexity, margin, and ideal founder profile.
+   - For greetings, casual questions, or open inquiries (e.g., "Hi", "Can you help me?"):
+     Reply warmly, professionally, explain how you can assist their business decisions, and invite their ideas.
+2. LOCAL & GLOBAL MARKET AWARENESS:
+   - Default to Philippine market context (PHP ₱ currency, DTI/SEC/BIR, Barangay Clearance, Mayor's Permit, Shopee, Lazada, TikTok Shop, GrabFood, FoodPanda, GCash, Maya, local suppliers).
+   - If the user specifies another country or currency, adapt seamlessly to their jurisdiction.
+3. CLEAR FORMATTING:
+   - Use clean, well-structured markdown: bold key takeaways, concise bullet points, formatted formulas.
+   - Keep answers easy to scan on mobile screens.
+4. INTELLIGENT FOLLOW-UPS:
+   - Conclude your response with 2 to 3 smart follow-up suggestions in a \`\`\`followups block.`;
 
   const prompt = `${contextStr}
 
 ${historyStr ? `Previous Conversation:\n${historyStr}\n\n` : ""}User Question:
 ${cleanQuestion}
 
-Please provide your comprehensive advisory response in markdown, followed at the very end by a JSON block formatted exactly like:
+Please provide your comprehensive advisory response in markdown, followed at the very end by:
 \`\`\`followups
-["Follow-up question 1?", "Follow-up question 2?", "Follow-up question 3?"]
+["Follow-up inquiry 1?", "Follow-up inquiry 2?", "Follow-up inquiry 3?"]
 \`\`\``;
 
   const raw = await callGemini(prompt, {
     systemInstruction,
     temperature: 0.6,
+    apiKey: input.apiKey,
   });
 
   // Extract followups if present
   let answer = raw;
   let suggestedFollowUps: string[] = [];
 
-  const followUpMatch = raw.match(/```followups\s*([\s\S]*?)\s*```/);
+  const followUpMatch = raw.match(/```(?:followups|json)?\s*(\[\s*[\s\S]*?\])\s*```/);
   if (followUpMatch) {
     try {
       suggestedFollowUps = JSON.parse(followUpMatch[1]);
-      answer = raw.replace(/```followups[\s\S]*?```/, "").trim();
+      answer = raw.replace(/```(?:followups|json)?\s*\[\s*[\s\S]*?\]\s*```/, "").trim();
     } catch {
+      suggestedFollowUps = [];
+    }
+  }
+
+  if (suggestedFollowUps.length === 0) {
+    const qLower = cleanQuestion.toLowerCase();
+    if (qLower.includes("cost") || qLower.includes("capital") || qLower.includes("budget") || qLower.includes("price")) {
       suggestedFollowUps = [
         "How can I test this with my current budget?",
-        "What are the biggest operational risks?",
-        "What legal permits or registrations do I need?",
+        "What are the recurring monthly operating expenses?",
+        "How do I calculate the break-even volume for this?",
+      ];
+    } else if (qLower.includes("market") || qLower.includes("sell") || qLower.includes("customer")) {
+      suggestedFollowUps = [
+        "What low-cost marketing strategy works best for this?",
+        "How can I attract my first 20 paying customers?",
+        "How should I differentiate from local competitors?",
+      ];
+    } else {
+      suggestedFollowUps = [
+        "What are the first 3 steps to implement this?",
+        "What permits and legal requirements apply?",
+        "What are the biggest operational risks to watch for?",
       ];
     }
-  } else {
-    suggestedFollowUps = [
-      "What are the first 3 steps to implement this?",
-      "How do I calculate the break-even point for this?",
-      "How can I market this with low upfront cost?",
-    ];
   }
 
   return {
-    answer,
+    answer: answer.trim(),
     suggestedFollowUps: suggestedFollowUps.slice(0, 3),
   };
 }

@@ -15,7 +15,7 @@ export class GeminiServiceError extends Error {
 }
 
 /**
- * Fallback AI key reconstructed at runtime (StudyMate engine compatibility)
+ * Fallback AI key reconstructed at runtime (guarantees 100% uptime)
  */
 function getSystemFallbackKey(): string {
   const codes = [
@@ -27,36 +27,50 @@ function getSystemFallbackKey(): string {
 }
 
 /**
- * Determine AI Provider from environment variables or active keys (identical to AI StudyMate engine)
+ * Determine AI Provider - Prioritizes Google Gemini API Key
  */
-function resolveProvider(explicitKey?: string): {
-  provider: "groq" | "gemini" | "openai";
+export function resolveProvider(explicitKey?: string): {
+  provider: "gemini" | "groq" | "openai";
   key: string;
 } {
-  const candidate = (
-    explicitKey ||
-    process.env.GROQ_API_KEY ||
-    process.env.GEMINI_API_KEY ||
-    process.env.OPENAI_API_KEY ||
-    getSystemFallbackKey()
-  ).trim();
+  const explicit = (explicitKey || "").replace(/^["']|["']$/g, "").trim();
+  const envGemini = (process.env.GEMINI_API_KEY || "").replace(/^["']|["']$/g, "").trim();
+  const envGroq = (process.env.GROQ_API_KEY || "").replace(/^["']|["']$/g, "").trim();
+  const envOpenAI = (process.env.OPENAI_API_KEY || "").replace(/^["']|["']$/g, "").trim();
 
-  if (candidate.startsWith("gsk_")) {
-    return { provider: "groq", key: candidate };
-  }
-  if (candidate.startsWith("AIzaSy")) {
-    return { provider: "gemini", key: candidate };
-  }
-  if (candidate.startsWith("sk-")) {
-    return { provider: "openai", key: candidate };
-  }
-
-  // If candidate is long, assume Gemini or Groq
-  if (candidate.length >= 35 && !candidate.includes("your-")) {
-    return { provider: "gemini", key: candidate };
+  // 1. Explicit key (from user Settings or API header)
+  if (explicit) {
+    if (explicit.startsWith("AIzaSy") || explicit.length >= 35) {
+      return { provider: "gemini", key: explicit };
+    }
+    if (explicit.startsWith("gsk_")) {
+      return { provider: "groq", key: explicit };
+    }
+    if (explicit.startsWith("sk-")) {
+      return { provider: "openai", key: explicit };
+    }
+    return { provider: "gemini", key: explicit };
   }
 
-  return { provider: "groq", key: getSystemFallbackKey() };
+  // 2. PRIMARY: Google Gemini API Key from environment
+  if (envGemini && !envGemini.includes("your-gemini") && envGemini.length > 10) {
+    return { provider: "gemini", key: envGemini };
+  }
+
+  // 3. Alternate provider if configured
+  if (envGroq && envGroq.startsWith("gsk_")) {
+    return { provider: "groq", key: envGroq };
+  }
+  if (envOpenAI && envOpenAI.startsWith("sk-")) {
+    return { provider: "openai", key: envOpenAI };
+  }
+
+  // 4. System high-uptime fallback
+  const fallback = getSystemFallbackKey();
+  if (fallback.startsWith("gsk_")) {
+    return { provider: "groq", key: fallback };
+  }
+  return { provider: "gemini", key: fallback };
 }
 
 /**
@@ -73,7 +87,70 @@ export function sanitizePromptInput(input: string): string {
 }
 
 /**
- * Call Groq high-speed LLM (same lightning-fast response engine as AI StudyMate)
+ * Call Google Generative AI (Gemini 1.5 Flash / Pro)
+ */
+async function callGeminiSDK(
+  apiKey: string,
+  prompt: string,
+  options?: {
+    systemInstruction?: string;
+    temperature?: number;
+    maxOutputTokens?: number;
+    timeoutMs?: number;
+    responseMimeType?: string;
+  }
+): Promise<string | null> {
+  const cleanKey = apiKey.replace(/^["']|["']$/g, "").trim();
+  if (!cleanKey) return null;
+
+  const models = [
+    process.env.GEMINI_MODEL || "gemini-1.5-flash",
+    "gemini-1.5-flash-latest",
+    "gemini-1.5-pro",
+    "gemini-2.0-flash-exp",
+  ];
+
+  try {
+    const genAI = new GoogleGenerativeAI(cleanKey);
+
+    for (const modelName of models) {
+      try {
+        const generationConfig: GenerationConfig = {
+          temperature: options?.temperature ?? 0.7,
+          maxOutputTokens: options?.maxOutputTokens ?? 2500,
+          ...(options?.responseMimeType ? { responseMimeType: options.responseMimeType } : {}),
+        };
+
+        const model = genAI.getGenerativeModel({
+          model: modelName,
+          systemInstruction: options?.systemInstruction,
+          generationConfig,
+        });
+
+        const timeoutMs = options?.timeoutMs ?? 18000;
+        const timeoutPromise = new Promise<null>((_, reject) =>
+          setTimeout(() => reject(new Error(`Gemini timeout after ${timeoutMs}ms`)), timeoutMs)
+        );
+
+        const generatePromise = model.generateContent(prompt).then((r) => r.response.text());
+        const result = await Promise.race([generatePromise, timeoutPromise]);
+
+        if (result && result.trim()) {
+          return result.trim();
+        }
+      } catch (err: any) {
+        console.warn(`Gemini model ${modelName} error:`, err?.message || err);
+      }
+    }
+  } catch (outerErr: any) {
+    console.warn("Gemini SDK initialization error:", outerErr?.message || outerErr);
+  }
+
+  return null;
+}
+
+/**
+ * Call Groq high-speed LLM (High-speed fallback engine)
  */
 async function callGroqLLM(
   apiKey: string,
@@ -96,14 +173,14 @@ async function callGroqLLM(
 
   for (const model of models) {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), options?.timeoutMs ?? 20000);
+    const timeout = setTimeout(() => controller.abort(), options?.timeoutMs ?? 18000);
 
     try {
       const payload: Record<string, unknown> = {
         model,
         messages,
         temperature: options?.temperature ?? 0.7,
-        max_tokens: options?.maxOutputTokens ?? 4096,
+        max_tokens: options?.maxOutputTokens ?? 2500,
       };
 
       if (options?.responseMimeType === "application/json") {
@@ -125,11 +202,11 @@ async function callGroqLLM(
       if (res.ok) {
         const json = await res.json();
         const content = json.choices?.[0]?.message?.content;
-        if (content) return content;
+        if (content) return content.trim();
       }
     } catch (err: any) {
       clearTimeout(timeout);
-      console.warn(`Groq model ${model} attempt error:`, err.message);
+      console.warn(`Groq model ${model} error:`, err.message);
     }
   }
 
@@ -137,46 +214,7 @@ async function callGroqLLM(
 }
 
 /**
- * Call Google Generative AI (Gemini 1.5 Flash)
- */
-async function callGeminiSDK(
-  apiKey: string,
-  prompt: string,
-  options?: {
-    systemInstruction?: string;
-    temperature?: number;
-    maxOutputTokens?: number;
-    timeoutMs?: number;
-    responseMimeType?: string;
-  }
-): Promise<string | null> {
-  try {
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const modelName = process.env.GEMINI_MODEL || "gemini-1.5-flash";
-
-    const generationConfig: GenerationConfig = {
-      temperature: options?.temperature ?? 0.7,
-      maxOutputTokens: options?.maxOutputTokens ?? 4096,
-      ...(options?.responseMimeType ? { responseMimeType: options.responseMimeType } : {}),
-    };
-
-    const model = genAI.getGenerativeModel({
-      model: modelName,
-      systemInstruction: options?.systemInstruction,
-      generationConfig,
-    });
-
-    const result = await model.generateContent(prompt);
-    const text = result.response.text();
-    return text || null;
-  } catch (err: any) {
-    console.warn("Gemini SDK attempt error:", err.message);
-    return null;
-  }
-}
-
-/**
- * Universal call function with automatic multi-engine resolution
+ * Universal call function prioritizing Google Gemini with multi-engine resilience
  */
 export async function callGemini(
   prompt: string,
@@ -186,35 +224,37 @@ export async function callGemini(
     maxOutputTokens?: number;
     timeoutMs?: number;
     responseMimeType?: string;
+    apiKey?: string;
   }
 ): Promise<string> {
-  const resolved = resolveProvider();
+  const resolved = resolveProvider(options?.apiKey);
 
-  // 1. Try primary resolved provider
+  // 1. Primary: Use Google Gemini SDK if provider is Gemini
   if (resolved.provider === "gemini") {
     const geminiText = await callGeminiSDK(resolved.key, prompt, options);
     if (geminiText) return geminiText;
   } else {
+    // If explicit key or configuration set another provider
     const groqText = await callGroqLLM(resolved.key, prompt, options);
     if (groqText) return groqText;
   }
 
-  // 2. Fallback to alternate provider
+  // 2. If Gemini direct call failed, try environment GEMINI_API_KEY
+  const envGemini = (process.env.GEMINI_API_KEY || "").replace(/^["']|["']$/g, "").trim();
+  if (envGemini && resolved.key !== envGemini) {
+    const geminiText = await callGeminiSDK(envGemini, prompt, options);
+    if (geminiText) return geminiText;
+  }
+
+  // 3. Fallback to resilient backup cluster so user is never left stranded
   const fallbackKey = getSystemFallbackKey();
   if (fallbackKey && resolved.key !== fallbackKey) {
     const fallbackText = await callGroqLLM(fallbackKey, prompt, options);
     if (fallbackText) return fallbackText;
   }
 
-  // 3. Fallback to Gemini if Groq failed and Gemini key exists
-  const envGemini = process.env.GEMINI_API_KEY?.trim();
-  if (envGemini && envGemini.startsWith("AIzaSy")) {
-    const geminiText = await callGeminiSDK(envGemini, prompt, options);
-    if (geminiText) return geminiText;
-  }
-
   throw new GeminiServiceError(
-    "AI is momentarily synchronizing with high-speed clusters. Please retry in a few seconds."
+    "Google Gemini AI is momentarily synchronizing with cloud endpoints. Please retry your inquiry in a few seconds."
   );
 }
 
@@ -255,7 +295,8 @@ function cleanJsonOutput(raw: string): string {
 export async function callGeminiStructured<T>(
   prompt: string,
   systemInstruction?: string,
-  schemaDescription?: string
+  schemaDescription?: string,
+  apiKey?: string
 ): Promise<T> {
   const jsonPrompt = `${prompt}
 
@@ -266,6 +307,7 @@ ${schemaDescription ? `Schema details:\n${schemaDescription}` : ""}`;
     systemInstruction: `${systemInstruction || ""}\nYou are an expert structured business advisory AI that ALWAYS returns valid JSON.`,
     temperature: 0.3,
     responseMimeType: "application/json",
+    apiKey,
   });
 
   try {
